@@ -1,1 +1,148 @@
 
+---
+- name: Validate TSM Instance After Fresh Install on Linux Red Hat Server
+  hosts: tsm_server
+  become: yes
+  tasks:
+
+    - name: Verify TSM Version
+      command: dsmc query version
+      register: tsm_version
+      ignore_errors: yes
+
+    - name: Print TSM Version
+      debug:
+        msg: "TSM Version: {{ tsm_version.stdout }}"
+
+    - name: Check Disk Space
+      command: df -h
+      register: disk_space
+
+    - name: Print Disk Space
+      debug:
+        msg: "{{ disk_space.stdout }}"
+
+    - name: Check Memory Usage
+      command: free -m
+      register: memory_usage
+
+    - name: Print Memory Usage
+      debug:
+        msg: "{{ memory_usage.stdout }}"
+
+    - name: Check CPU Load
+      command: uptime
+      register: cpu_load
+
+    - name: Print CPU Load
+      debug:
+        msg: "{{ cpu_load.stdout }}"
+
+    - name: Verify TSM Server Status
+      systemd:
+        name: dsmserv
+        state: started
+        enabled: yes
+
+    - name: Verify TSM Client Status
+      systemd:
+        name: dsmcad
+        state: started
+        enabled: yes
+
+    - name: Check TSM Server Logs
+      command: tail -n 50 /var/log/tsm/dsmerror.log
+      register: server_logs
+
+    - name: Print TSM Server Logs
+      debug:
+        msg: "{{ server_logs.stdout }}"
+
+    - name: Check TSM Client Logs
+      command: tail -n 50 /var/log/tsm/dsmsched.log
+      register: client_logs
+
+    - name: Print TSM Client Logs
+      debug:
+        msg: "{{ client_logs.stdout }}"
+
+    - name: Configure TSM Server Options
+      blockinfile:
+        path: /opt/tivoli/tsm/server/bin/dsmserv.opt
+        block: |
+          COMMMethod TCPIP
+          TCPPort 1500
+          TCPAdminPort 1501
+
+    - name: Configure TSM Client Options
+      blockinfile:
+        path: /opt/tivoli/tsm/client/ba/bin/dsm.sys
+        block: |
+          SErvername  TSM_SERVER
+          COMMmethod  TCPip
+          TCPPort     1500
+          TCPServeraddress tsmserver.example.com
+
+    - name: Configure TSM Client User Options
+      blockinfile:
+        path: /opt/tivoli/tsm/client/ba/bin/dsm.opt
+        block: |
+          SErvername  TSM_SERVER
+
+    - name: Create a Test File for Backup
+      copy:
+        content: "TSM Backup Test"
+        dest: /tmp/testfile.txt
+
+    - name: Perform Backup of Test File
+      command: dsmc selective /tmp/testfile.txt
+      register: backup_result
+
+    - name: Print Backup Result
+      debug:
+        msg: "{{ backup_result.stdout }}"
+
+    - name: Verify Backup of Test File
+      command: dsmc query backup /tmp/testfile.txt
+      register: verify_backup
+
+    - name: Print Verify Backup Result
+      debug:
+        msg: "{{ verify_backup.stdout }}"
+
+    - name: Delete the Test File
+      file:
+        path: /tmp/testfile.txt
+        state: absent
+
+    - name: Restore the Test File
+      command: dsmc restore /tmp/testfile.txt
+      register: restore_result
+
+    - name: Print Restore Result
+      debug:
+        msg: "{{ restore_result.stdout }}"
+
+    - name: Verify Restored Test File
+      command: cat /tmp/testfile.txt
+      register: verify_restore
+
+    - name: Print Verify Restore Result
+      debug:
+        msg: "{{ verify_restore.stdout }}"
+
+    - name: Run TSM Server Health Check
+      command: dsmserv auditdb
+      register: health_check
+
+    - name: Print Health Check Result
+      debug:
+        msg: "{{ health_check.stdout }}"
+
+    - name: Check TSM Server Database
+      command: dsmserv show dbs
+      register: check_dbs
+
+    - name: Print Database Check Result
+      debug:
+        msg: "{{ check_dbs.stdout }}"
