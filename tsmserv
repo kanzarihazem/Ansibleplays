@@ -1,16 +1,1 @@
-    - name: Check if many files under the same path exist
-      stat:
-        path: "{{ item }}"
-      register: file_stat
-      with_items: "{{ files_to_check }}"
-      ignore_errors: yes
 
-    - name: Add file existence status to test results
-      set_fact:
-        test_results: "{{ test_results }}\nFile {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
-      with_items: "{{ file_stat.results }}"
-
-    - name: Display file existence status
-      debug:
-        msg: "File {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
-      with_items: "{{ file_stat.results }}"
