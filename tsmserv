@@ -1,5 +1,6 @@
-   - name: Check if /opt/tivoli/test.opt contains required words
-      shell: "egrep -q 'server|shm|tsmdata' /opt/tivoli/test.opt"
+    - name: Check if /opt/tivoli/test.opt contains required words
+      shell: |
+        grep -q 'server' /opt/tivoli/test.opt && grep -q 'shm' /opt/tivoli/test.opt && grep -q 'tsmdata' /opt/tivoli/test.opt
       register: words_check
       ignore_errors: yes
 
