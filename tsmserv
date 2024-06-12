@@ -1,13 +1,16 @@
-    - name: Check if /opt/tivoli/test.opt contains required words
-      shell: |
-        grep -q 'server' /opt/tivoli/test.opt && grep -q 'shm' /opt/tivoli/test.opt && grep -q 'tsmdata' /opt/tivoli/test.opt
-      register: words_check
+    - name: Check if many files under the same path exist
+      stat:
+        path: "{{ item }}"
+      register: file_stat
+      with_items: "{{ files_to_check }}"
       ignore_errors: yes
 
-    - name: Add file content check status to test results
+    - name: Add file existence status to test results
       set_fact:
-        test_results: "{{ test_results }}\nFile /opt/tivoli/test.opt contains required words: {{ 'OK' if words_check.rc == 0 else 'NOTOK' }}"
+        test_results: "{{ test_results }}\nFile {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
+      with_items: "{{ file_stat.results }}"
 
-    - name: Display file content check status
+    - name: Display file existence status
       debug:
-        msg: "File /opt/tivoli/test.opt contains required words: {{ 'OK' if words_check.rc == 0 else 'NOTOK' }}"
+        msg: "File {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
+      with_items: "{{ file_stat.results }}"
