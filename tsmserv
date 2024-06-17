@@ -1,1 +1,25 @@
+    - name: Get user information
+      getent:
+        database: passwd
+        key: "{{ instance_name }}"
+      register: user_info
+      ignore_errors: yes
 
+    - name: Check if user is in group tsmsrvrs with GID 2020 and has correct home and shell
+      set_fact:
+        user_check: >
+          {% if user_info.entries and user_info.entries[0].gecos.split(':')[2] == "2020"
+                and user_info.entries[0].home == "/tsmdata/{{ instance_name }}/cfg"
+                and user_info.entries[0].shell == "/bin/bash" %}
+            OK
+          {% else %}
+            NOTOK
+          {% endif %}
+
+    - name: Add user configuration check to test results
+      set_fact:
+        test_results: "{{ test_results }}\nUser {{ instance_name }} configuration: {{ user_check }}"
+
+    - name: Display user configuration check result
+      debug:
+        msg: "User {{ instance_name }} configuration: {{ user_check }}"
