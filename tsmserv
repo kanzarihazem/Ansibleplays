@@ -1,1 +1,194 @@
 
+---
+- name: Validate and check TSM server
+  hosts: tsm_servers
+  gather_facts: no
+  become: yes
+  vars_files:
+    - vars/secrets.yml
+  vars:
+    tsm_user: your_tsm_user_here
+    test_results: ""
+    files_to_check:
+      - /opt/tivoli/file1
+      - /opt/tivoli/file2
+      - /opt/tivoli/file3
+    manual_checks_message: |
+      Remaining manual checks:
+      - Verify TSM client settings manually in /opt/tivoli/tsm/client/ba/bin/dsm.sys
+      - Ensure that the backup schedules are properly configured
+      - Check TSM server logs for any anomalies
+      - Validate that all necessary network ports are open and correctly configured
+      - Confirm the backup data integrity manually
+
+  tasks:
+    - name: Check if TSM service is running
+      shell: systemctl is-active dsmcad
+      register: service_status
+      ignore_errors: yes
+
+    - name: Add TSM service status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nTSM Service: {{ 'OK' if service_status.stdout == 'active' else 'NOTOK' }}"
+
+    - name: Display TSM service status
+      debug:
+        msg: "TSM Service: {{ 'OK' if service_status.stdout == 'active' else 'NOTOK' }}"
+
+    - name: Check installed TSM version
+      shell: dsmc query session -se={{ tsm_user }} -pa={{ tsm_password }}
+      register: tsm_version
+      ignore_errors: yes
+
+    - name: Add TSM version to test results
+      set_fact:
+        test_results: "{{ test_results }}\nTSM Version: {{ 'OK' if 'IBM Spectrum Protect' in tsm_version.stdout else 'NOTOK' }}"
+
+    - name: Display TSM version
+      debug:
+        msg: "TSM Version: {{ 'OK' if 'IBM Spectrum Protect' in tsm_version.stdout else 'NOTOK' }}"
+
+    - name: Check TSM server connectivity
+      shell: dsmc query session -se={{ tsm_user }} -pa={{ tsm_password }}
+      register: tsm_connectivity
+      ignore_errors: yes
+
+    - name: Add TSM server connectivity to test results
+      set_fact:
+        test_results: "{{ test_results }}\nTSM Connectivity: {{ 'OK' if 'Session established' in tsm_connectivity.stdout else 'NOTOK' }}"
+
+    - name: Display TSM server connectivity
+      debug:
+        msg: "TSM Connectivity: {{ 'OK' if 'Session established' in tsm_connectivity.stdout else 'NOTOK' }}"
+
+    - name: Check disk space available for backups
+      command: df -h /backup
+      register: disk_space
+      ignore_errors: yes
+
+    - name: Add disk space available to test results
+      set_fact:
+        test_results: "{{ test_results }}\nDisk Space: {{ 'OK' if disk_space.stdout else 'NOTOK' }}"
+
+    - name: Display disk space available for backups
+      debug:
+        msg: "Disk Space: {{ 'OK' if disk_space.stdout else 'NOTOK' }}"
+
+    - name: Check if TSM configuration file exists
+      stat:
+        path: /opt/tivoli/tsm/client/ba/bin/dsm.opt
+      register: tsm_config
+      ignore_errors: yes
+
+    - name: Add TSM configuration file status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nTSM Config File: {{ 'OK' if tsm_config.stat.exists else 'NOTOK' }}"
+
+    - name: Display TSM configuration file status
+      debug:
+        msg: "TSM Config File: {{ 'OK' if tsm_config.stat.exists else 'NOTOK' }}"
+
+    - name: Extract TSM filesystems from fstab
+      shell: grep stg /etc/fstab | awk '{print $2}'
+      register: tsm_filesystems
+      ignore_errors: yes
+
+    - name: Check if TSM filesystems are mounted
+      shell: mount | grep -w {{ item }}
+      with_items: "{{ tsm_filesystems.stdout_lines }}"
+      register: mount_check
+      ignore_errors: yes
+
+    - name: Add TSM filesystems mount status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nFilesystem {{ item.item }}: {{ 'OK' if item.stdout else 'NOTOK' }}"
+      with_items: "{{ mount_check.results }}"
+
+    - name: Display TSM filesystems mount status
+      debug:
+        msg: "Filesystem {{ item.item }}: {{ 'OK' if item.stdout else 'NOTOK' }}"
+      with_items: "{{ mount_check.results }}"
+
+    - name: Check if LACP is activated
+      shell: nmcli con show | grep bond
+      register: lacp_check
+      ignore_errors: yes
+
+    - name: Add LACP status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nLACP: {{ 'OK' if lacp_check.stdout else 'NOTOK' }}"
+
+    - name: Display LACP status
+      debug:
+        msg: "LACP: {{ 'OK' if lacp_check.stdout else 'NOTOK' }}"
+
+    - name: Check number of volume groups
+      shell: vgs --noheadings | wc -l
+      register: vg_count
+      ignore_errors: yes
+
+    - name: Add VG count status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nVG Count: {{ 'OK' if vg_count.stdout|int > 10 else 'NOTOK' }}"
+
+    - name: Display VG count status
+      debug:
+        msg: "VG Count: {{ 'OK' if vg_count.stdout|int > 10 else 'NOTOK' }}"
+
+    - name: Check Red Hat version
+      shell: cat /etc/redhat-release
+      register: redhat_version
+      ignore_errors: yes
+
+    - name: Add Red Hat version status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nRed Hat Version: {{ 'OK' if (redhat_version.stdout.split()[6]|float > 7.7) else 'NOTOK' }}"
+
+    - name: Display Red Hat version status
+      debug:
+        msg: "Red Hat Version: {{ 'OK' if (redhat_version.stdout.split()[6]|float > 7.7) else 'NOTOK' }}"
+
+    - name: Check if /opt/tivoli/test.opt contains required words
+      shell: |
+        grep -q 'server' /opt/tivoli/test.opt && grep -q 'shm' /opt/tivoli/test.opt && grep -q 'tsmdata' /opt/tivoli/test.opt
+      register: words_check
+      ignore_errors: yes
+
+    - name: Add file content check status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nFile /opt/tivoli/test.opt contains required words: {{ 'OK' if words_check.rc == 0 else 'NOTOK' }}"
+
+    - name: Display file content check status
+      debug:
+        msg: "File /opt/tivoli/test.opt contains required words: {{ 'OK' if words_check.rc == 0 else 'NOTOK' }}"
+
+    - name: Check if many files under the same path exist
+      stat:
+        path: "{{ item }}"
+      register: file_stat
+      with_items: "{{ files_to_check }}"
+      ignore_errors: yes
+
+    - name: Add file existence status to test results
+      set_fact:
+        test_results: "{{ test_results }}\nFile {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
+      with_items: "{{ file_stat.results }}"
+
+    - name: Display file existence status
+      debug:
+        msg: "File {{ item.item }}: {{ 'OK' if item.stat.exists else 'NOTOK' }}"
+      with_items: "{{ file_stat.results }}"
+
+    - name: Add manual checks message to test results
+      set_fact:
+        test_results: "{{ test_results }}\n\n{{ manual_checks_message }}"
+
+    - name: Display manual checks message
+      debug:
+        msg: "{{ manual_checks_message }}"
+
+    - name: Write test results to a file
+      copy:
+        content: "{{ test_results }}"
+        dest: /tmp/tsm_validation_results.txt
+      ignore_errors: yes
