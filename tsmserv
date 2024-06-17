@@ -1,25 +1,13 @@
-    - name: Get user information
-      getent:
-        database: passwd
-        key: "{{ instance_name }}"
-      register: user_info
+    - name: Verify user configuration
+      shell: |
+        getent passwd {{ instance_name }} | awk -F: '{if ($4 == 2020 && $6 == "/tsmdata/{{ instance_name }}/cfg" && $7 == "/bin/bash") print "OK"; else print "NOTOK"}'
+      register: user_check
       ignore_errors: yes
-
-    - name: Check if user is in group tsmsrvrs with GID 2020 and has correct home and shell
-      set_fact:
-        user_check: >
-          {% if user_info.entries and user_info.entries[0].gecos.split(':')[2] == "2020"
-                and user_info.entries[0].home == "/tsmdata/{{ instance_name }}/cfg"
-                and user_info.entries[0].shell == "/bin/bash" %}
-            OK
-          {% else %}
-            NOTOK
-          {% endif %}
 
     - name: Add user configuration check to test results
       set_fact:
-        test_results: "{{ test_results }}\nUser {{ instance_name }} configuration: {{ user_check }}"
+        test_results: "{{ test_results }}\nUser {{ instance_name }} configuration: {{ user_check.stdout }}"
 
     - name: Display user configuration check result
       debug:
-        msg: "User {{ instance_name }} configuration: {{ user_check }}"
+        msg: "User {{ instance_name }} configuration: {{ user_check.stdout }}"
