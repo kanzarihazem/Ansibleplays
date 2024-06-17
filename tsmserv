@@ -1,1 +1,36 @@
+    - name: Check number of physical processors
+      set_fact:
+        physical_processors: "{{ ansible_facts['processor_cores'] // ansible_facts['processor_count'] }}"
 
+    - name: Add physical processors check to test results
+      set_fact:
+        test_results: "{{ test_results }}\nPhysical Processors: {{ 'OK' if physical_processors|int >= 2 else 'NOTOK' }}"
+
+    - name: Display physical processors check result
+      debug:
+        msg: "Physical Processors: {{ 'OK' if physical_processors|int >= 2 else 'NOTOK' }}"
+
+    - name: Check total RAM
+      set_fact:
+        total_ram: "{{ ansible_facts['memtotal_mb'] // 1024 }}"
+
+    - name: Add total RAM check to test results
+      set_fact:
+        test_results: "{{ test_results }}\nTotal RAM (GB): {{ 'OK' if total_ram|int > 380 else 'NOTOK' }}"
+
+    - name: Display total RAM check result
+      debug:
+        msg: "Total RAM (GB): {{ 'OK' if total_ram|int > 380 else 'NOTOK' }}"
+
+    - name: Add manual checks message to test results
+      set_fact:
+        test_results: "{{ test_results }}\n{{ manual_checks_message }}"
+
+    - name: Display manual checks message
+      debug:
+        msg: "{{ manual_checks_message }}"
+
+    - name: Write test results to file
+      copy:
+        dest: /tmp/test_results.txt
+        content: "{{ test_results }}"
