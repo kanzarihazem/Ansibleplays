@@ -1,1 +1,69 @@
 
+roles/
+└── manage_log_dir/
+    ├── tasks/
+    │   ├── main.yml
+    │   ├── test_flux.yml
+    │   ├── traitement_backup_app.yml
+    │   └── traitement_backup_system.yml
+    ├── defaults/
+    │   └── main.yml
+    └── vars/
+        └── main.yml
+
+
+log_dir: "/var/log/myapp"  # Default directory, should be overridden by vars or playbook
+servername: "localhost"    # Default server name, should be overridden by vars or playbook
+tcpport: 23 main
+
+---
+- name: Ensure rc_test_flux is set by running test_flux
+  include_tasks: test_flux.yml
+  register: rc_test_flux_result
+
+- name: Set rc_test_flux from the function result
+  set_fact:
+    rc_test_flux: "{{ rc_test_flux_result.rc_test_flux }}"
+
+- name: Check if rc_test_flux is 0
+  block:
+    - name: Check if log_dir exists
+      stat:
+        path: "{{ log_dir }}"
+      register: log_dir_stat
+
+    - name: Remove contents of log_dir if it exists
+      file:
+        path: "{{ log_dir }}/"
+        state: absent
+      when: log_dir_stat.stat.exists
+
+    - name: Recreate the log_dir if it was deleted
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+      when: log_dir_stat.stat.exists
+
+    - name: Create log_dir if it does not exist
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+      when: not log_dir_stat.stat.exists
+
+    - name: Fail if log_dir could not be created
+      fail:
+        msg: "Impossible to create directory {{ log_dir }}, Exit"
+      when: not log_dir_stat.stat.exists and not log_dir_stat.stat.isdir
+
+    - name: Run traitement_backup_app function
+      include_tasks: traitement_backup_app.yml
+
+    - name: Run traitement_backup_system function
+      include_tasks: traitement_backup_system.yml
+
+  when: rc_test_flux == 0
+
+- name: Fail if rc_test_flux is not 0
+  fail:
+    msg: "Telnet KO on {{ servername }} with port {{ tcpport }}, Exit"
+  when: rc_test_flux != 0
