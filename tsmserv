@@ -1,106 +1,63 @@
-roles/
-  spectrum_protect_upgrade/
-    tasks/
-      main.yml
-    vars/
-      main.yml
-    files/
-      responsefile.tmpl.j2
-
 ---
-admin_user: "admin"
-admin_pass: "adminpass"
-dev_class: "tapeclass"
-backup_dir: "/backup"
-dsmserv_opt_src: "/path/to/dsmserv.opt"
-nodelock_src: "/path/to/NODELOCK"
-artifactory_url: "https://artifactory.example.com/path/to/upgrade_package.tar.gz"
-download_dir: "/tmp"
-install_dir: "/opt/ibm/spectrum_protect"
+- name: Manage TSM Client
+  hosts: all
+  vars:
+    tsm_version: "8.1.13.1"  # Desired TSM version
+  tasks:
 
+    # Step 1: Check if TSM client binary exists
+    - name: Check if TSM client binary exists
+      ansible.builtin.command: "which dsmc"
+      register: tsm_check
+      failed_when: false
 
----
-- name: Gather list of Db2 instances
-  command: /opt/tivoli/tsm/db2/instance/db2ilist
-  register: db2_instances
+    - name: Set fact for TSM installation status
+      ansible.builtin.set_fact:
+        tsm_installed: "{{ tsm_check.rc == 0 }}"
 
-- name: Display Db2 instances
-  debug:
-    msg: "{{ db2_instances.stdout_lines }}"
+    - name: Debug TSM installation status
+      ansible.builtin.debug:
+        msg: >
+          TSM client is {{ 'installed' if tsm_installed else 'not installed' }}.
 
-- name: Back up Spectrum Protect database
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} backup db type=dbsnapshot devclass={{ dev_class }}"
+    # Step 2: Retrieve raw TSM version if installed
+    - name: Retrieve raw TSM client version
+      ansible.builtin.shell: "dsmc query session | grep -i 'client version'"
+      when: tsm_installed
+      register: tsm_raw_version
+      failed_when: false
 
-- name: Back up device configuration
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} backup devconfig filenames={{ backup_dir }}/devconfig.bak"
+    - name: Format TSM client version
+      ansible.builtin.shell: >
+        echo "{{ tsm_raw_version.stdout.strip() }}" |
+        awk -F '[ ,]+' '{print $3"."$5"."$7"."$9}'
+      when: tsm_installed
+      register: tsm_installed_version
+      failed_when: false
 
-- name: Back up volume history file
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} backup volhistory filenames={{ backup_dir }}/volhistory.bak"
+    - name: Debug formatted TSM client version
+      ansible.builtin.debug:
+        msg: >
+          Formatted TSM client version is {{ tsm_installed_version.stdout.strip() if tsm_installed else 'unknown' }}.
 
-- name: Save server options file
-  copy:
-    src: "{{ dsmserv_opt_src }}"
-    dest: "{{ backup_dir }}/dsmserv.opt"
+    # Step 3: Compare installed version with desired version
+    - name: Check if installed version is lower than desired version
+      ansible.builtin.set_fact:
+        tsm_needs_update: "{{ tsm_installed_version.stdout.strip() is version(tsm_version, '<') }}"
+      when: tsm_installed
 
-- name: Disable client sessions
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} disable sessions client"
+    - name: Debug version comparison
+      ansible.builtin.debug:
+        msg: >
+          Installed TSM version {{ tsm_installed_version.stdout.strip() }} is
+          {{ 'lower than' if tsm_needs_update else 'not lower than' }} the desired version {{ tsm_version }}.
+      when: tsm_installed
 
-- name: Disable server sessions
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} disable sessions server"
+    # Step 4: Execute tasks for installation or update
+    - name: Include tasks to install TSM
+      ansible.builtin.include_tasks: install.yml
+      when: not tsm_installed
 
-- name: Query for existing sessions
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} query session"
-  register: active_sessions
-
-- name: Display active sessions
-  debug:
-    msg: "{{ active_sessions.stdout_lines }}"
-
-- name: Cancel all active sessions
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} cancel session all"
-
-- name: Stop the Spectrum Protect server
-  command: "dsmadmc -id={{ admin_user }} -password={{ admin_pass }} halt"
-
-- name: Verify server shutdown
-  command: ps -ef | grep dsmserv
-  register: dsm_processes
-
-- name: Ensure server processes are stopped
-  debug:
-    msg: "{{ dsm_processes.stdout_lines }}"
-
-- name: Move NODELOCK file to backup
-  copy:
-    src: "{{ nodelock_src }}"
-    dest: "{{ backup_dir }}/NODELOCK"
-
-- name: Download upgrade binaries from Artifactory
-  get_url:
-    url: "{{ artifactory_url }}"
-    dest: "{{ download_dir }}/upgrade_package.tar.gz"
-    mode: '0755'
-    validate_certs: no
-
-- name: Extract upgrade binaries
-  unarchive:
-    src: "{{ download_dir }}/upgrade_package.tar.gz"
-    dest: "{{ install_dir }}"
-    remote_src: yes
-
-- name: Generate response file from template
-  template:
-    src: responsefile.tmpl.j2
-    dest: "{{ install_dir }}/responsefile.txt"
-    mode: '0644'
-
-- name: Upgrade Spectrum Protect in silent mode
-  command: "{{ install_dir }}/install.bin -silent -response {{ install_dir }}/responsefile.txt"
-
-- name: Verify installation log
-  shell: "grep 'Install Complete' {{ install_dir }}/install.log"
-  register: install_log
-
-- name: Display installation log check
-  debug:
-    msg: "{{ install_log.stdout }}"
+    - name: Include tasks to update TSM
+      ansible.builtin.include_tasks: update.yml
+      when: tsm_needs_update
