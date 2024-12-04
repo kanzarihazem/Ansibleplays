@@ -1,1 +1,130 @@
 
+---
+- name: Manage TSM Client
+  hosts: all
+  vars:
+    # Variable to control pre-upgrade or post-upgrade behavior
+    AIP: "pre_upgrade"  # Change to "pre_upgrade" or "post_upgrade" as needed
+    # Mapping of desired TSM versions for each Red Hat version
+    tsm_versions:
+      "7": "8.1.10"
+      "8": "8.1.12"
+      "9": "8.1.13"
+    tsm_conf_dir: "/opt/tivoli/tsm/client/ba/bin"  # Directory containing TSM config files
+    backup_dir: "/var/backups/tsm"  # Directory to store backups
+
+  tasks:
+
+    # Block 1: Pre-Upgrade Tasks
+    - name: Pre-upgrade tasks
+      when: AIP == "pre_upgrade"
+      block:
+        - name: Ensure backup directory exists
+          ansible.builtin.file:
+            path: "{{ backup_dir }}"
+            state: directory
+            mode: '0755'
+
+        - name: Backup dsm.opt file
+          ansible.builtin.copy:
+            src: "{{ tsm_conf_dir }}/dsm.opt"
+            dest: "{{ backup_dir }}/dsm.opt.backup"
+            remote_src: yes
+
+        - name: Backup dsm.sys file
+          ansible.builtin.copy:
+            src: "{{ tsm_conf_dir }}/dsm.sys"
+            dest: "{{ backup_dir }}/dsm.sys.backup"
+            remote_src: yes
+
+        - name: Debug pre-upgrade completion
+          ansible.builtin.debug:
+            msg: "Pre-upgrade tasks completed. TSM configuration files backed up to {{ backup_dir }}."
+
+    # Block 2: Post-Upgrade Tasks
+    - name: Post-upgrade tasks
+      when: AIP == "post_upgrade"
+      block:
+        # Step 1: Determine the Red Hat version
+        - name: Get Red Hat version
+          ansible.builtin.command: "cat /etc/redhat-release"
+          register: redhat_version_raw
+          failed_when: false
+
+        - name: Parse Red Hat major version
+          ansible.builtin.set_fact:
+            redhat_major_version: "{{ redhat_version_raw.stdout | regex_search('\\d+') }}"
+
+        - name: Debug Red Hat version
+          ansible.builtin.debug:
+            msg: "The Red Hat major version is {{ redhat_major_version }}."
+
+        # Step 2: Determine desired TSM version based on Red Hat version
+        - name: Set desired TSM version
+          ansible.builtin.set_fact:
+            desired_tsm_version: "{{ tsm_versions[redhat_major_version] }}"
+          when: redhat_major_version in tsm_versions
+
+        - name: Debug desired TSM version
+          ansible.builtin.debug:
+            msg: "The desired TSM version for Red Hat {{ redhat_major_version }} is {{ desired_tsm_version }}."
+
+        # Step 3: Check if TSM client binary exists
+        - name: Check if TSM client binary exists
+          ansible.builtin.command: "which dsmc"
+          register: tsm_check
+          failed_when: false
+
+        - name: Set fact for TSM installation status
+          ansible.builtin.set_fact:
+            tsm_installed: "{{ tsm_check.rc == 0 }}"
+
+        - name: Debug TSM installation status
+          ansible.builtin.debug:
+            msg: "TSM client is {{ 'installed' if tsm_installed else 'not installed' }}."
+
+        # Step 4: Retrieve TSM version if installed
+        - name: Retrieve raw TSM client version
+          ansible.builtin.shell: "dsmc query session | grep -i 'client version'"
+          when: tsm_installed
+          register: tsm_raw_version
+          failed_when: false
+
+        - name: Format TSM client version
+          ansible.builtin.shell: >
+            echo "{{ tsm_raw_version.stdout.strip() }}" |
+            awk -F '[ ,]+' '{print $3"."$5"."$7"."$9}'
+          when: tsm_installed
+          register: tsm_installed_version
+          failed_when: false
+
+        - name: Debug formatted TSM client version
+          ansible.builtin.debug:
+            msg: >
+              Formatted TSM client version is {{ tsm_installed_version.stdout.strip() if tsm_installed else 'unknown' }}.
+
+        # Step 5: Compare installed version with desired version
+        - name: Check if installed version is lower than desired version
+          ansible.builtin.set_fact:
+            tsm_needs_update: "{{ tsm_installed_version.stdout.strip() is version(desired_tsm_version, '<') }}"
+          when: tsm_installed
+
+        - name: Debug version comparison
+          ansible.builtin.debug:
+            msg: >
+              Installed TSM version {{ tsm_installed_version.stdout.strip() }} is
+              {{ 'lower than' if tsm_needs_update else 'not lower than' }} the desired version {{ desired_tsm_version }}.
+          when: tsm_installed
+
+        # Step 6: Install or update TSM client
+        - name: Install TSM client
+          ansible.builtin.yum:
+            name: "tivsm-client-{{ desired_tsm_version }}"
+            state: present
+          when: not tsm_installed
+
+        - name: Update TSM client
+          ansible.builtin.yum:
+            name: "tivsm-client-{{ desired_tsm_version }}"
+            state: latest
+          when: tsm_needs_update
