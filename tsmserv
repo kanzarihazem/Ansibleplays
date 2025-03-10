@@ -2,24 +2,20 @@
 - name: Verify if NetBackup Client is installed
   hosts: all
   gather_facts: false
-  vars:
-    netbackup_packages:
-      - VRTSpbx
-      - VRTSnbjava
-      - VRTSnbjre
-      - VRTSpddeu
-      - VRTSpddei
-      - VRTSpostgresql
+  vars:ctattr('stdout', '!=', '') | list | length > 0
+
+---
+- name: Verify if NetBackup Client is installed on Windows
+  hosts: all
+  gather_facts: false
+
   tasks:
-    - name: Check if NetBackup client RPMs are installed on Linux
-      shell: rpm -qa | grep "{{ item }}"
-      loop: "{{ netbackup_packages }}"
-      register: netbackup_check
-      ignore_errors: true
-      changed_when: false
+    - name: Check if NetBackup client is installed on Windows
+      win_reg_stat:
+        path: 'HKLM:\SOFTWARE\Veritas\NetBackup\CurrentVersion'
+      register: netbackup_check_windows
 
-    - name: Fail if NetBackup client is already installed
+    - name: Fail if NetBackup client is already installed on Windows
       fail:
-        msg: "NetBackup client is already installed on this machine."
-      when: netbackup_check.results | selectattr('stdout', '!=', '') | list | length > 0
-
+        msg: "NetBackup client is already installed on this Windows machine."
+      when: netbackup_check_windows.exists
