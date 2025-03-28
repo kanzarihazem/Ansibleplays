@@ -1,1 +1,9 @@
+- name: Gather facts about the filesystem
+  ansible.builtin.stat:
+    path: /apps/deploy
+  register: deploy_fs
 
+- name: Fail if /apps/deploy has less than 1GB free
+  ansible.builtin.fail:
+    msg: "Not enough space on /apps/deploy. At least 1GB is required."
+  when: deploy_fs.stat.exists and deploy_fs.stat.mount and deploy_fs.stat.available < 1073741824
