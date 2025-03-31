@@ -1,9 +1,17 @@
-- name: Gather facts about the filesystem
-  ansible.builtin.stat:
-    path: /apps/deploy
-  register: deploy_fs
+- name: Download TSM package
+  get_url:
+    url: "{{ registry_server }}{{ registry_url }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
+    dest: "{{ deploy_dir }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
+  when: rpm_check is succeeded
+  tags:
+    - update
 
-- name: Fail if /apps/deploy has less than 1GB free
-  ansible.builtin.fail:
-    msg: "Not enough space on /apps/deploy. At least 1GB is required."
-  when: deploy_fs.stat.exists and deploy_fs.stat.mount and deploy_fs.stat.available < 1073741824
+- name: Unarchive TSM package
+  unarchive:
+    src: "{{ deploy_dir }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
+    dest: "{{ deploy_dir }}"
+    remote_src: false
+  register: unarchive_result
+  when: rpm_check is succeeded
+  tags:
+    - update
