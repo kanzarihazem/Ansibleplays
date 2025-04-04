@@ -1,17 +1,12 @@
-- name: Download TSM package
-  get_url:
-    url: "{{ registry_server }}{{ registry_url }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
-    dest: "{{ deploy_dir }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
-  when: rpm_check is succeeded
-  tags:
-    - update
+- name: Find processes using GSKit libraries (without lsof or shell)
+  community.general.ps:
+    pid: all
+  register: process_list
 
-- name: Unarchive TSM package
-  unarchive:
-    src: "{{ deploy_dir }}/SPBAClient-AGENT_{{ tsm_version }}_{{ tsm_rules }}_LINUX_GEN_FR-IT.tar"
-    dest: "{{ deploy_dir }}"
-    remote_src: false
-  register: unarchive_result
-  when: rpm_check is succeeded
-  tags:
-    - update
+- name: Extract GSKit-related processes
+  set_fact:
+    gsk_processes: "{{ process_list.processes | selectattr('cmdline', 'search', 'gsk') | map(attribute='comm') | list | unique }}"
+
+- name: Show matching processes
+  debug:
+    var: gsk_processes
