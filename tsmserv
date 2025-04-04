@@ -1,12 +1,16 @@
-- name: Find processes using GSKit libraries (without lsof or shell)
-  community.general.ps:
-    pid: all
-  register: process_list
 
-- name: Extract GSKit-related processes
-  set_fact:
-    gsk_processes: "{{ process_list.processes | selectattr('cmdline', 'search', 'gsk') | map(attribute='comm') | list | unique }}"
+- name: Find processes using GSKit libraries
+  ansible.builtin.shell: |
+    for pid in $(ls /proc | grep -E '^[0-9]+$'); do
+      if [[ -r /proc/$pid/maps ]]; then
+        if grep -q gsk /proc/$pid/maps 2>/dev/null; then
+          cmd=$(cat /proc/$pid/comm 2>/dev/null)
+          echo $cmd
+        fi
+      fi
+    done | sort -u
+  register: gsk_processes
 
-- name: Show matching processes
+- name: Show GSKit-related processes
   debug:
-    var: gsk_processes
+    var: gsk_processes.stdout_lines
