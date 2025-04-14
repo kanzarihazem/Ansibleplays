@@ -1,15 +1,62 @@
+#!/bin/bash
 
-- name: Find processes using GSKit libraries
-  ansible.builtin.shell: |
-    for pid in $(ls /proc | grep -E '^[0-9]+$'); do
-      if [[ -r /proc/$pid/maps ]]; then
-        if grep -q gsk /proc/$pid/maps 2>/dev/null; then
-          cmd=$(cat /proc/$pid/comm 
+# Configuration
+BASE_URL="https://monserveur-netbackup:1556"
+ACCESS_TOKEN="votre_token_ici"
+LIMIT=100
+OFFSET=0
+TOTAL=0
 
+# Ne PAS vérifier le certificat SSL (à adapter selon ton environnement)
+CURL_OPTS="-sk"
 
+echo "Récupération des jobs non terminés depuis NetBackup..."
 
+while true; do
+  echo "Appel API - Offset : $OFFSET"
 
-curl -k -X GET \
-  'https://<hostname>:1556/netbackup/job-service/jobs?filter=status ne COMPLETED and status ne FAILED and status ne ABORTED&sort=-startTime&page[limit]=100&page[offset]=0' \
+  response=$(curl $CURL_OPTS -X GET \
+    "${BASE_URL}/netbackup/job-service/jobs?sort=-startTime&page[limit]=${LIMIT}&page[offset]=${OFFSET}" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    -H "Content-Type: application/json")
+
+  # Vérification d'erreur éventuelle
+  error=$(echo "$response" | jq -r '.errors[0].title // empty')
+  if [[ -n "$error" ]]; then
+    echo "Erreur API : $error"
+    break
+  fi
+
+  # Extraction des jobs
+  jobs=$(echo "$response" | jq -c '.data[]')
+
+  # S'il n'y a plus de jobs, on quitte
+  if [[ -z "$jobs" ]]; then
+    echo "Fin de la pagination."
+    break
+  fi
+
+  # Filtrage des jobs non terminés
+  echo "$jobs" | while read -r job; do
+    status=$(echo "$job" | jq -r '.attributes.status')
+    if [[ "$status" != "COMPLETED" && "$status" != "FAILED" && "$status" != "ABORTED" ]]; then
+      id=$(echo "$job" | jq -r '.id')
+      type=$(echo "$job" | jq -r '.attributes.jobType')
+      start=$(echo "$job" | jq -r '.attributes.startTime')
+      echo "- ID: $id | Type: $type | Statut: $status | Début: $start"
+      TOTAL=$((TOTAL + 1))
+    fi
+  done
+
+  # Page suivante
+  OFFSET=$((OFFSET + LIMIT))
+done
+
+echo ""
+echo "Total des jobs non terminés : $TOTAL"
+
+curl -sk -X GET \
+  'https://<hostname>:1556/netbackup/job-service/jobs?sort=-startTime&page[limit]=100&page[offset]=0' \
   -H 'Authorization: Bearer <access_token>' \
-  -H 'Content-Type: application/json'
+  -H 'Content-Type: application/json' | \
+  jq '.data[] | select(.attributes.status != "COMPLETED" and .attributes.status != "FAILED" and .attributes.status != "ABORTED")'
