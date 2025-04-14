@@ -4,13 +4,12 @@
     for pid in $(ls /proc | grep -E '^[0-9]+$'); do
       if [[ -r /proc/$pid/maps ]]; then
         if grep -q gsk /proc/$pid/maps 2>/dev/null; then
-          cmd=$(cat /proc/$pid/comm 2>/dev/null)
-          echo $cmd
-        fi
-      fi
-    done | sort -u
-  register: gsk_processes
+          cmd=$(cat /proc/$pid/comm 
 
-- name: Show GSKit-related processes
-  debug:
-    var: gsk_processes.stdout_lines
+
+
+
+curl -k -X GET \
+  'https://<hostname>:1556/netbackup/job-service/jobs?filter=status ne COMPLETED and status ne FAILED and status ne ABORTED&sort=-startTime&page[limit]=100&page[offset]=0' \
+  -H 'Authorization: Bearer <access_token>' \
+  -H 'Content-Type: application/json'
