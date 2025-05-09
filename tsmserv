@@ -1,66 +1,23 @@
-#!/bin/bash
+- name: check if dsm.opt exists
+  ansible.builtin.stat:
+    path: "{{ dsmopt_dir }}/dsm.opt"
+  register: dsm_opt_file
 
-# === Configuration ===
-BASE_URL="https://monserveur-netbackup:1556"
-ACCESS_TOKEN="votre_token_ici"
-LIMIT=100
-OFFSET=0
-TOTAL=0
-LAST_IDS=""
+- name: backup dsm.opt option file
+  ansible.builtin.copy:
+    src: "{{ dsmopt_dir }}/dsm.opt"
+    dest: "{{ backup_dir }}/dsm.opt.back"
+    remote_src: yes
+  when: dsm_opt_file.stat.exists
 
-# Désactiver vérification SSL
-CURL_OPTS="-sk"
+- name: check if dsm.sys exists
+  ansible.builtin.stat:
+    path: "{{ dsmopt_dir }}/dsm.sys"
+  register: dsm_sys_file
 
-echo "== Récupération des jobs non terminés depuis NetBackup =="
-
-while true; do
-  echo "Appel API - Offset : $OFFSET"
-
-  response=$(curl $CURL_OPTS -X GET \
-    "${BASE_URL}/netbackup/job-service/jobs?sort=-startTime&page[limit]=${LIMIT}&page[offset]=${OFFSET}" \
-    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-    -H "Content-Type: application/vnd.netbackup+json;version=1.0")
-
-  # Vérifier les erreurs de l'API
-  error=$(echo "$response" | jq -r '.errors[0].title // empty')
-  if [[ -n "$error" ]]; then
-    echo "Erreur API : $error"
-    break
-  fi
-
-  # Extraire les jobs
-  jobs=$(echo "$response" | jq -c '.data[]')
-  count=$(echo "$jobs" | wc -l)
-
-  # Vérifier si page vide
-  if [[ -z "$jobs" || "$count" -eq 0 ]]; then
-    echo "Fin de la pagination : aucune donnée reçue."
-    break
-  fi
-
-  # Vérification si on retombe sur les mêmes IDs (boucle infinie)
-  current_ids=$(echo "$jobs" | jq -r '.id' | sort | tr '\n' ' ')
-  if [[ "$current_ids" == "$LAST_IDS" ]]; then
-    echo "Fin de la pagination : données répétées détectées."
-    break
-  fi
-  LAST_IDS="$current_ids"
-
-  # Traitement des jobs non terminés
-  echo "$jobs" | while read -r job; do
-    status=$(echo "$job" | jq -r '.attributes.status')
-    if [[ "$status" != "COMPLETED" && "$status" != "FAILED" && "$status" != "ABORTED" ]]; then
-      id=$(echo "$job" | jq -r '.id')
-      type=$(echo "$job" | jq -r '.attributes.jobType')
-      start=$(echo "$job" | jq -r '.attributes.startTime')
-      primary=$(echo "$job" | jq -r '.relationships.primary.data.id')
-      echo "- ID: $id | Type: $type | Statut: $status | Début: $start | Primary: $primary"
-      TOTAL=$((TOTAL + 1))
-    fi
-  done
-
-  OFFSET=$((OFFSET + LIMIT))
-done
-
-echo ""
-echo "== Total des jobs non terminés : $TOTAL =="
+- name: backup dsm.sys option file
+  ansible.builtin.copy:
+    src: "{{ dsmopt_dir }}/dsm.sys"
+    dest: "{{ backup_dir }}/dsm.sys.back"
+    remote_src: yes
+  when: dsm_sys_file.stat.exists
