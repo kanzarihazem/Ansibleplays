@@ -1,23 +1,54 @@
-- name: check if dsm.opt exists
-  ansible.builtin.stat:
-    path: "{{ dsmopt_dir }}/dsm.opt"
-  register: dsm_opt_file
+- name: Check if the service is present
+  ansible.builtin.systemd:
+    name: "SP_Scheduler_sys.service"
+  register: service_status
+  failed_when: false
+  changed_when: false
 
-- name: backup dsm.opt option file
-  ansible.builtin.copy:
-    src: "{{ dsmopt_dir }}/dsm.opt"
-    dest: "{{ backup_dir }}/dsm.opt.back"
-    remote_src: yes
-  when: dsm_opt_file.stat.exists
+- name: Notify if service is not present
+  ansible.builtin.debug:
+    msg: "Le service SP_Scheduler_sys.service n'est pas présent sur ce système."
+  when:
+    - service_status is defined
+    - service_status.status is not defined
 
-- name: check if dsm.sys exists
-  ansible.builtin.stat:
-    path: "{{ dsmopt_dir }}/dsm.sys"
-  register: dsm_sys_file
+- name: Stop the service if present
+  ansible.builtin.systemd:
+    name: "SP_Scheduler_sys.service"
+    state: stopped
+    enabled: yes
+  when:
+    - service_status is defined
+    - service_status.status is defined
+    - service_status.status.LoadState == "loaded"
 
-- name: backup dsm.sys option file
-  ansible.builtin.copy:
-    src: "{{ dsmopt_dir }}/dsm.sys"
-    dest: "{{ backup_dir }}/dsm.sys.back"
-    remote_src: yes
-  when: dsm_sys_file.stat.exists
+- name: Removing the required packages
+  ansible.builtin.yum:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - "TIVsm-BA"
+    - "TIVsm-API64"
+    - "gskcrypt64"
+    - "gskssl64"
+  when:
+    - service_status is defined
+    - service_status.status is defined
+    - service_status.status.LoadState == "loaded"
+
+- name: Unarchive TSM package
+  ansible.builtin.unarchive:
+    src: "{{ registry_server }}{{ registry_url }}"
+    dest: "{{ deploy_dir }}"
+    remote_src: true
+  when:
+    - service_status is defined
+    - service_status.status is defined
+    - service_status.status.LoadState == "loaded"
+
+- name: Notify if all tasks were skipped
+  ansible.builtin.debug:
+    msg: "Les tâches ont été ignorées car le service SP_Scheduler_sys.service n'est pas présent."
+  when:
+    - service_status is defined
+    - service_status.status is not defined
