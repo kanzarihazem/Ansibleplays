@@ -1,26 +1,19 @@
-- name: Check if the service is present
-  ansible.builtin.systemd:
-    name: "SP_Scheduler_sys.service"
-  register: service_status
-  failed_when: false
-  changed_when: false
+- name: Check if the service file exists
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/SP_Scheduler_sys.service"
+  register: service_file
 
 - name: Notify if service is not present
   ansible.builtin.debug:
     msg: "Le service SP_Scheduler_sys.service n'est pas présent sur ce système."
-  when:
-    - service_status is defined
-    - service_status.status is not defined
+  when: not service_file.stat.exists
 
 - name: Stop the service if present
   ansible.builtin.systemd:
     name: "SP_Scheduler_sys.service"
     state: stopped
     enabled: yes
-  when:
-    - service_status is defined
-    - service_status.status is defined
-    - service_status.status.LoadState == "loaded"
+  when: service_file.stat.exists
 
 - name: Removing the required packages
   ansible.builtin.yum:
@@ -31,24 +24,16 @@
     - "TIVsm-API64"
     - "gskcrypt64"
     - "gskssl64"
-  when:
-    - service_status is defined
-    - service_status.status is defined
-    - service_status.status.LoadState == "loaded"
+  when: service_file.stat.exists
 
 - name: Unarchive TSM package
   ansible.builtin.unarchive:
     src: "{{ registry_server }}{{ registry_url }}"
     dest: "{{ deploy_dir }}"
     remote_src: true
-  when:
-    - service_status is defined
-    - service_status.status is defined
-    - service_status.status.LoadState == "loaded"
+  when: service_file.stat.exists
 
 - name: Notify if all tasks were skipped
   ansible.builtin.debug:
     msg: "Les tâches ont été ignorées car le service SP_Scheduler_sys.service n'est pas présent."
-  when:
-    - service_status is defined
-    - service_status.status is not defined
+  when: not service_file.stat.exists
