@@ -1,39 +1,62 @@
-- name: Check if the service file exists
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/SP_Scheduler_sys.service"
-  register: service_file
+- name: netbackup > client > verify env
+  ansible.builtin.assert:
+    that:
+      - netbackup_env is defined
+      - netbackup_env != None
+      - netbackup_env | length > 0
+  quiet: true
+  fail_msg: "ERROR netbackup_env variable is not defined"
 
-- name: Notify if service is not present
-  ansible.builtin.debug:
-    msg: "Le service SP_Scheduler_sys.service n'est pas présent sur ce système."
-  when: not service_file.stat.exists
+- name: netbackup > client > verify os distribution
+  ansible.builtin.assert:
+    that:
+      - (ansible_distribution_major_version == '7') or (ansible_distribution_major_version == '8')
+  fail_msg: "ERROR incompatible OS distribution major version"
+  quiet: true
 
-- name: Stop the service if present
-  ansible.builtin.systemd:
-    name: "SP_Scheduler_sys.service"
-    state: stopped
-    enabled: yes
-  when: service_file.stat.exists
+- name: netbackup > client > Check which NetBackup client RPMs are installed
+  shell: rpm -qa | grep "{{ item }}"
+  loop: "{{ netbackup_packages }}"
+  register: netbackup_check
+  ignore_errors: true
+  changed_when: false
 
-- name: Removing the required packages
-  ansible.builtin.yum:
-    name: "{{ item }}"
-    state: absent
-  loop:
-    - "TIVsm-BA"
-    - "TIVsm-API64"
-    - "gskcrypt64"
-    - "gskssl64"
-  when: service_file.stat.exists
+- name: netbackup > client > Count installed NetBackup RPMs
+  set_fact:
+    netbackup_installed_count: "{{ netbackup_check.results | selectattr('rc', 'equalto', 0) | list | length }}"
 
-- name: Unarchive TSM package
-  ansible.builtin.unarchive:
-    src: "{{ registry_server }}{{ registry_url }}"
-    dest: "{{ deploy_dir }}"
-    remote_src: true
-  when: service_file.stat.exists
+- name: netbackup > client > Fail if all NetBackup RPMs are already installed
+  fail:
+    msg: "NBU client already installed, nothing to do."
+  when: netbackup_installed_count == 6
 
-- name: Notify if all tasks were skipped
-  ansible.builtin.debug:
-    msg: "Les tâches ont été ignorées car le service SP_Scheduler_sys.service n'est pas présent."
-  when: not service_file.stat.exists
+- name: netbackup > client > Remove incomplete NetBackup installation
+  shell: >
+    rpm -e {{ netbackup_check.results
+               | selectattr('rc', 'equalto', 0)
+               | map(attribute='stdout')
+               | join(' ') }}
+  when: netbackup_installed_count < 6 and netbackup_installed_count > 0
+  ignore_errors: true
+
+- name: netbackup > client > Run yum clean all
+  command: yum clean all
+  when: netbackup_installed_count < 6
+
+- name: netbackup > client > Log cleanup action
+  debug:
+    msg: "Incomplete NetBackup installation detected. Cleanup performed."
+  when: netbackup_installed_count < 6
+
+# Proceed with remaining tasks
+- name: netbackup > client > check dependencies
+  ansible.builtin.import_tasks: check_nbu_dependencies.yml
+
+- name: netbackup > client > validate netbackup client version
+  ansible.builtin.import_tasks: validate_nbu_version.yml
+
+- name: netbackup > client > validate disk space
+  ansible.builtin.import_tasks: validate_nbu_disk_space.yml
+
+- name: netbackup > client > install
+  ansible.builtin.import_tasks: install_nbu_client.yml
