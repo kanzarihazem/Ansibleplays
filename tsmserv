@@ -1,62 +1,11 @@
-- name: netbackup > client > verify env
-  ansible.builtin.assert:
-    that:
-      - netbackup_env is defined
-      - netbackup_env != None
-      - netbackup_env | length > 0
-  quiet: true
-  fail_msg: "ERROR netbackup_env variable is not defined"
+Subject: Farewell and Thank You
 
-- name: netbackup > client > verify os distribution
-  ansible.builtin.assert:
-    that:
-      - (ansible_distribution_major_version == '7') or (ansible_distribution_major_version == '8')
-  fail_msg: "ERROR incompatible OS distribution major version"
-  quiet: true
+Hello everyone,
 
-- name: netbackup > client > Check which NetBackup client RPMs are installed
-  shell: rpm -qa | grep "{{ item }}"
-  loop: "{{ netbackup_packages }}"
-  register: netbackup_check
-  ignore_errors: true
-  changed_when: false
+As my journey here comes to an end, I wanted to take a moment to say goodbye and thank you all.
 
-- name: netbackup > client > Count installed NetBackup RPMs
-  set_fact:
-    netbackup_installed_count: "{{ netbackup_check.results | selectattr('rc', 'equalto', 0) | list | length }}"
+It has been a true pleasure working alongside you these past few years. I’m grateful for the opportunities, the learning experiences, and above all, the people I’ve had the chance to collaborate with. I’ll carry with me many great memories of our time together.
 
-- name: netbackup > client > Fail if all NetBackup RPMs are already installed
-  fail:
-    msg: "NBU client already installed, nothing to do."
-  when: netbackup_installed_count == 6
+Though I’m heading off to explore a new professional chapter, I sincerely hope our paths will cross again in the future. Please don’t hesitate to reach out — I’d be happy to stay in touch.
 
-- name: netbackup > client > Remove incomplete NetBackup installation
-  shell: >
-    rpm -e {{ netbackup_check.results
-               | selectattr('rc', 'equalto', 0)
-               | map(attribute='stdout')
-               | join(' ') }}
-  when: netbackup_installed_count < 6 and netbackup_installed_count > 0
-  ignore_errors: true
-
-- name: netbackup > client > Run yum clean all
-  command: yum clean all
-  when: netbackup_installed_count < 6
-
-- name: netbackup > client > Log cleanup action
-  debug:
-    msg: "Incomplete NetBackup installation detected. Cleanup performed."
-  when: netbackup_installed_count < 6
-
-# Proceed with remaining tasks
-- name: netbackup > client > check dependencies
-  ansible.builtin.import_tasks: check_nbu_dependencies.yml
-
-- name: netbackup > client > validate netbackup client version
-  ansible.builtin.import_tasks: validate_nbu_version.yml
-
-- name: netbackup > client > validate disk space
-  ansible.builtin.import_tasks: validate_nbu_disk_space.yml
-
-- name: netbackup > client > install
-  ansible.builtin.import_tasks: install_nbu_client.yml
+Wishing you all continued success, both professionally and personally.
