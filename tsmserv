@@ -66,7 +66,13 @@ config-sas:
       artifacts: true
   rules:
     - if: ($CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "web") && (($ACTION == "config") || ($ACTION == "install_config")) && ($TYPE_SAS != "ALL")
-  when: manual
+  script:
+  - cat ${STACK_NAME}/inventory.ini
+  - ./scripts/dop_osm/adapt-inv.sh ${STACK_NAME}/inventory.ini inventory_cible_${STACK_NAME}
+  - |
+    ansible-playbook -i inventory_cible_${STACK_NAME} config_sas.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD sas_version=$CONF_VERSION ACTION=$ACTION"
 
-
+    if [ "$ACTION" = "install_config" ]; then
+      ansible-playbook -i inventory_cible_${STACK_NAME} cert_update.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD ACTION=$ACTION"
+    fi
 
