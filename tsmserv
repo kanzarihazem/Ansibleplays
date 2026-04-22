@@ -43,10 +43,30 @@ ansible-playbook -i inventory_cible_${STACK_NAME} config_sas.yml --extra-vars "t
   when: ACTION == "install_config"
 
 
-when: ACTION | default('') == "install_config"
+when: ACTION | default('') == ".
 
 
 
+
+
+
+config-sas-all:
+  extends: .exploit:config-sas-all
+  needs:
+    - job: get-specific-inventory
+      artifacts: true
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "web") && (($ACTION == "config") || ($ACTION == "install_config")) && ($TYPE_SAS == "ALL")
+  when: manual
+
+config-sas:
+  extends: .exploit:config-sas
+  needs:
+    - job: get-specific-inventory
+      artifacts: true
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "web") && (($ACTION == "config") || ($ACTION == "install_config")) && ($TYPE_SAS != "ALL")
+  when: manual
 
 
 
