@@ -1,11 +1,52 @@
-Subject: Farewell and Thank You
+ansible-playbook -i inventory_cible_${STACK_NAME} config_sas.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD sas_version=$CONF_VERSION ACTION=$ACTION"
 
-Hello everyone,
+- name: Bloc config
+  block:
+    - name: Rechercher un script config spécifique à l'hôte
+      ansible.builtin.find:
+        paths: "{{ sas_tmp_dir }}"
+        patterns: "{{ ansible_hostname }}-configfiles-installation_SASv{{ sas_version }}.sh"
+        recurse: yes
+      register: config_script
 
-As my journey here comes to an end, I wanted to take a moment to say goodbye and thank you all.
+    - name: Exécuter le script config si présent
+      ansible.builtin.shell: |
+        /bin/bash "{{ item.path }}"
+      loop: "{{ config_script.files }}"
+      when: config_script.matched > 0
 
-It has been a true pleasure working alongside you these past few years. I’m grateful for the opportunities, the learning experiences, and above all, the people I’ve had the chance to collaborate with. I’ll carry with me many great memories of our time together.
+    - name: restart sas
+      ansible.builtin.service:
+        name: "sas.service"
+        state: restarted
+  when: ACTION == "config"
 
-Though I’m heading off to explore a new professional chapter, I sincerely hope our paths will cross again in the future. Please don’t hesitate to reach out — I’d be happy to stay in touch.
+- name: Bloc install_config
+  block:
+    - name: Rechercher un script install_config spécifique à l'hôte
+      ansible.builtin.find:
+        paths: "{{ sas_tmp_dir }}"
+        patterns: "{{ ansible_hostname }}-install-config-installation_SASv{{ sas_version }}.sh"
+        recurse: yes
+      register: install_config_script
 
-Wishing you all continued success, both professionally and personally.
+    - name: Exécuter le script install_config si présent
+      ansible.builtin.shell: |
+        /bin/bash "{{ item.path }}"
+      loop: "{{ install_config_script.files }}"
+      when: install_config_script.matched > 0
+
+    - name: restart sas
+      ansible.builtin.service:
+        name: "sas.service"
+        state: restarted
+  when: ACTION == "install_config"
+
+
+when: ACTION | default('') == "install_config"
+
+
+
+
+
+
