@@ -1,78 +1,9 @@
-ansible-playbook -i inventory_cible_${STACK_NAME} config_sas.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD sas_version=$CONF_VERSION ACTION=$ACTION"
-
-- name: Bloc config
-  block:
-    - name: Rechercher un script config spécifique à l'hôte
-      ansible.builtin.find:
-        paths: "{{ sas_tmp_dir }}"
-        patterns: "{{ ansible_hostname }}-configfiles-installation_SASv{{ sas_version }}.sh"
-        recurse: yes
-      register: config_script
-
-    - name: Exécuter le script config si présent
-      ansible.builtin.shell: |
-        /bin/bash "{{ item.path }}"
-      loop: "{{ config_script.files }}"
-      when: config_script.matched > 0
-
-    - name: restart sas
-      ansible.builtin.service:
-        name: "sas.service"
-        state: restarted
-  when: ACTION == "config"
-
-- name: Bloc install_config
-  block:
-    - name: Rechercher un script install_config spécifique à l'hôte
-      ansible.builtin.find:
-        paths: "{{ sas_tmp_dir }}"
-        patterns: "{{ ansible_hostname }}-install-config-installation_SASv{{ sas_version }}.sh"
-        recurse: yes
-      register: install_config_script
-
-    - name: Exécuter le script install_config si présent
-      ansible.builtin.shell: |
-        /bin/bash "{{ item.path }}"
-      loop: "{{ install_config_script.files }}"
-      when: install_config_script.matched > 0
-
-    - name: restart sas
-      ansible.builtin.service:
-        name: "sas.service"
-        state: restarted
-  when: ACTION == "install_config"
 
 
-when: ACTION | default('') == ".
+Bonjour Benoît,
 
+Je rejoins l’avis d’Olivier. Le stockage étant présenté via des LUN SAN sur les baies Dell Compellent SC5020, le point de vigilance sera principalement l’impact I/O ainsi que la durée du scan en fonction de la volumétrie et du nombre de fichiers.
 
+Je préconise donc un premier test en HNO, hors fenêtre de backup, sur un périmètre représentatif, avec suivi des IOPS, de la latence et de la bande passante SAN.
 
-
-
-
-config-sas-all:
-  extends: .exploit:config-sas-all
-  needs:
-    - job: get-specific-inventory
-      artifacts: true
-  rules:
-    - if: ($CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "web") && (($ACTION == "config") || ($ACTION == "install_config")) && ($TYPE_SAS == "ALL")
-  when: manual
-
-config-sas:
-  extends: .exploit:config-sas
-  needs:
-    - job: get-specific-inventory
-      artifacts: true
-  rules:
-    - if: ($CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "web") && (($ACTION == "config") || ($ACTION == "install_config")) && ($TYPE_SAS != "ALL")
-  script:
-  - cat ${STACK_NAME}/inventory.ini
-  - ./scripts/dop_osm/adapt-inv.sh ${STACK_NAME}/inventory.ini inventory_cible_${STACK_NAME}
-  - |
-    ansible-playbook -i inventory_cible_${STACK_NAME} config_sas.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD sas_version=$CONF_VERSION ACTION=$ACTION"
-
-    if [ "$ACTION" = "install_config" ]; then
-      ansible-playbook -i inventory_cible_${STACK_NAME} cert_update.yml --extra-vars "target=$TYPE_SAS TYPE=$TYPE_SAS WORKLOAD=$WORKLOAD ACTION=$ACTION"
-    fi
-
+En fonction des résultats, nous pourrons déterminer s’il est préférable de lancer le scan complet sur une fenêtre dédiée ou de l’échelonner en plusieurs lots.
