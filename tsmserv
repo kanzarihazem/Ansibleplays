@@ -1,9 +1,21 @@
+Objet : Compte rendu – Étude de l’utilisation de VMAAS pour notre Sandbox
 
+Bonjour,
 
-Bonjour Benoît,
+Suite à notre échange concernant la possibilité d’utiliser la plateforme VMAAS pour notre environnement Sandbox, voici les différents prérequis et actions identifiés :
 
-Je rejoins l’avis d’Olivier. Le stockage étant présenté via des LUN SAN sur les baies Dell Compellent SC5020, le point de vigilance sera principalement l’impact I/O ainsi que la durée du scan en fonction de la volumétrie et du nombre de fichiers.
+* Effectuer une demande VDI DEVOPS, avec l’équipe Windows en copie.
+* Effectuer une demande de compte IDM ZNP auprès de l’équipe Linux.
+* Vérifier l’accès à GitLab ZNP. En cas d’accès refusé, effectuer une demande d’accès GitLab auprès de l’équipe Service Manager (STET INFRA VIRTU).
+* Pour la création des VM, effectuer une demande d’accès au service VMAAS auprès de l’équipe ISI.
+* Si un groupe GitLab dédié est nécessaire, effectuer la demande auprès de l’équipe Manager.
+* Une demande pourra regrouper les besoins liés au groupe GitLab, au coffre-fort Vault et au repository Nexus.
 
-Je préconise donc un premier test en HNO, hors fenêtre de backup, sur un périmètre représentatif, avec suivi des IOPS, de la latence et de la bande passante SAN.
+Afin de clarifier ces différents points, notamment les modalités d’accès à VMAAS, les prérequis et le processus de mise à disposition des VM pour notre Sandbox, il serait utile d’organiser un échange avec l’équipe ISI.
 
-En fonction des résultats, nous pourrons déterminer s’il est préférable de lancer le scan complet sur une fenêtre dédiée ou de l’échelonner en plusieurs lots.
+Pouvez-vous me communiquer vos disponibilités afin que nous puissions planifier cette réunion ?
+
+Merci par avance.
+
+Bien cordialement,
+Hazem
