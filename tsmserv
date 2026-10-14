@@ -1,1 +1,22 @@
+# /etc/rsyslog.d/60-clamav.conf
+module(load="imfile")
 
+input(type="imfile"
+      File="/var/log/clamav/clamav.log"
+      Tag="clamav:"
+      Facility="local6"
+      Severity="info"
+      ruleset="clamav_host")
+
+template(name="ClamavWithHost" type="string"
+  string="%TIMESTAMP:::date-rfc3339% %HOSTNAME% clamav: %msg%\n")
+
+ruleset(name="clamav_host") {
+  action(type="omfile"
+         file="/var/log/clamav/clamav-host.log"
+         template="ClamavWithHost")
+}
+
+
+sudo rsyslogd -N1      # syntax check
+sudo systemctl restart rsyslog
